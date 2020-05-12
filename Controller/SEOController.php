@@ -33,23 +33,58 @@ class SEOController extends Controller
     public function robotsAction()
     {
         $response = new Response();
-        $response->setSharedMaxAge( 24 * 3600 );
-        $robots = [ "User-agent: *" ];
+        $response->setSharedMaxAge(86400);
+        $robots = ['User-agent: *'];
 
-        if ( $this->get( 'kernel' )->getEnvironment() != "prod" )
-        {
-            $robots[] = "Disallow: /";
+        $robotsRules             = $this->getConfigResolver()->getParameter('robots', 'nova_ezseo');
+        $backwardCompatibleRules = $this->getConfigResolver()->getParameter('robots_disallow', 'nova_ezseo');
+
+        if (\is_array($robotsRules['sitemap'])) {
+            foreach ($robotsRules['sitemap'] as $sitemapRules) {
+                foreach ($sitemapRules as $key => $value) {
+                    if ('route' === $key) {
+                        $url      = $this->generateUrl($value, [], UrlGeneratorInterface::ABSOLUTE_URL);
+                        $robots[] = "Sitemap: {$url}";
+                    }
+                    if ('url' === $key) {
+                        $robots[] = "Sitemap: {$value}";
+                    }
+                }
+            }
         }
-        $rules = $this->getConfigResolver()->getParameter( 'robots_disallow', 'nova_ezseo' );
-        if ( is_array( $rules ) )
-        {
-            foreach ( $rules as $rule )
-            {
+        if (\is_array($robotsRules['allow'])) {
+            foreach ($robotsRules['allow'] as $rule) {
+                $robots[] = "Allow: {$rule}";
+            }
+        }
+        if (\is_array($robotsRules['useragent'])) {
+            foreach ($robotsRules['useragent'] as $rule) {
+                $robots[] = "User-agent: {$rule["name"]}";
+                if ($rule["disallow"] !== null)
+                    $robots[] = "Disallow: {$rule["disallow"]}";
+                if ($rule["allow"] !== null)
+                    $robots[] = "Allow: {$rule["allow"]}";
+            }
+        }
+        if ('prod' !== $this->getParameter('kernel.environment')) {
+            $robots[] = 'Disallow: /';
+        }
+
+        if (\is_array($robotsRules['disallow'])) {
+            foreach ($robotsRules['disallow'] as $rule) {
                 $robots[] = "Disallow: {$rule}";
             }
         }
-        $response->setContent( implode( "\n", $robots ) );
-        $response->headers->set( "Content-Type", "text/plain" );
+
+        if (\is_array($backwardCompatibleRules)) {
+            foreach ($backwardCompatibleRules as $rule) {
+                $robots[] = "Disallow: {$rule}";
+            }
+        }
+
+        $response->setContent(implode("\n", $robots));
+        $response->headers->set('Content-Type', 'text/plain');
+
         return $response;
     }
 
